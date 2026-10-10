@@ -1,0 +1,228 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Pesos BA">
+<meta name="theme-color" content="#0b1b3a">
+<title>Mis pesos en Buenos Aires</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-180.png">
+<style>
+  :root{
+    --fondo:#0b1b3a; --tarjeta:#13264f; --borde:#223a6b; --texto:#f3f6fb; --tenue:#9fb0d0;
+    --acento:#4fd1c5; --ok:#5ee29a; --alerta:#ffb86b; --peligro:#ff6b6b;
+    --radio:16px;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;background:var(--fondo);color:var(--texto);font:16px/1.4 -apple-system,BlinkMacSystemFont,"SF Pro Text",Helvetica,Arial,sans-serif;-webkit-text-size-adjust:100%}
+  body{padding:max(12px,env(safe-area-inset-top)) 14px max(24px,env(safe-area-inset-bottom))}
+  h1{font-size:20px;margin:8px 0 12px;display:flex;justify-content:space-between;align-items:center}
+  h1 small{font-size:12px;color:var(--tenue);font-weight:400}
+  .tarjeta{background:var(--tarjeta);border:1px solid var(--borde);border-radius:var(--radio);padding:14px;margin-bottom:12px}
+  .grande{font-size:30px;font-weight:700;letter-spacing:-.5px}
+  .tenue{color:var(--tenue);font-size:13px}
+  .fila{display:flex;gap:10px;align-items:center}
+  .fila>*{flex:1}
+  input{width:100%;font-size:22px;font-weight:600;padding:12px;border-radius:12px;border:1px solid var(--borde);background:#0e1f44;color:var(--texto);outline:none}
+  input:focus{border-color:var(--acento)}
+  input.nota{font-size:16px;font-weight:400}
+  label{display:block;font-size:12px;color:var(--tenue);margin:0 0 4px 4px}
+  button{font:inherit;border:0;border-radius:12px;padding:12px 14px;background:var(--acento);color:#06251f;font-weight:700;cursor:pointer;-webkit-tap-highlight-color:transparent}
+  button.sec{background:#1d3366;color:var(--texto);font-weight:600}
+  button.icono{padding:8px 12px;background:transparent;color:var(--tenue);font-size:20px}
+  .referencias{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
+  .referencias span{font-size:12px;color:var(--tenue);background:#0e1f44;padding:4px 8px;border-radius:8px}
+  .barra{height:10px;background:#0e1f44;border-radius:6px;overflow:hidden;margin:10px 0 6px}
+  .barra i{display:block;height:100%;background:var(--ok);width:0;transition:width .3s}
+  .barra.alerta i{background:var(--alerta)} .barra.peligro i{background:var(--peligro)}
+  .resumen{display:flex;justify-content:space-between;font-size:14px}
+  ul{list-style:none;margin:0;padding:0}
+  li{display:flex;align-items:center;gap:10px;padding:10px 0;border-top:1px solid var(--borde)}
+  li:first-child{border-top:0}
+  li .info{flex:1;min-width:0}
+  li .nota{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  li .meta{font-size:12px;color:var(--tenue)}
+  li .montos{text-align:right;white-space:nowrap}
+  li .montos b{display:block;font-size:17px}
+  li .montos span{font-size:12px;color:var(--tenue)}
+  .vacio{text-align:center;color:var(--tenue);padding:16px 0}
+  .aviso{position:fixed;left:14px;right:14px;bottom:max(18px,env(safe-area-inset-bottom));background:#1d3366;border:1px solid var(--borde);border-radius:14px;padding:12px 14px;display:none;justify-content:space-between;align-items:center;box-shadow:0 8px 30px rgba(0,0,0,.4)}
+  .aviso.ver{display:flex}
+  .dia{font-size:12px;color:var(--tenue);margin:14px 0 4px;text-transform:uppercase;letter-spacing:.5px}
+  .estado{font-size:12px;color:var(--tenue);display:flex;justify-content:space-between;align-items:center;margin-top:6px}
+  .punto{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--tenue);margin-right:6px}
+  .punto.ok{background:var(--ok)} .punto.viejo{background:var(--alerta)}
+</style>
+</head>
+<body>
+<h1>Mis pesos en Buenos Aires <small id="fechaHoy"></small></h1>
+
+<section class="tarjeta" id="tarjetaTasa">
+  <div class="tenue">1.000 pesos chilenos valen (dólar blue)</div>
+  <div class="grande" id="tasaPrincipal">—</div>
+  <div class="tenue" id="tasaInversa"></div>
+  <div class="referencias" id="referencias"></div>
+  <div class="estado"><span><i class="punto" id="punto"></i><span id="estadoTasa">Sin datos</span></span><button class="icono" id="btnActualizar" title="Actualizar">↻</button></div>
+</section>
+
+<section class="tarjeta">
+  <div class="fila">
+    <div><label>Pesos argentinos</label><input id="convArs" inputmode="decimal" placeholder="ARS"></div>
+    <div><label>Pesos chilenos</label><input id="convClp" inputmode="decimal" placeholder="CLP"></div>
+  </div>
+</section>
+
+<section class="tarjeta">
+  <div class="resumen"><span class="tenue">Llevé</span><b id="presupuesto" title="Tocar para cambiar">—</b></div>
+  <div class="barra" id="barra"><i></i></div>
+  <div class="resumen"><span>Gastado <b id="gastadoClp">—</b></span><span>Me queda <b id="restanteClp">—</b></span></div>
+  <div class="tenue" id="restanteArs" style="margin-top:4px"></div>
+</section>
+
+<section class="tarjeta">
+  <div class="fila" style="margin-bottom:8px">
+    <input id="monto" inputmode="decimal" placeholder="Monto en ARS" autocomplete="off">
+    <button id="btnAgregar" style="flex:0 0 auto">Agregar</button>
+  </div>
+  <input id="nota" class="nota" placeholder="¿En qué? (opcional)" autocomplete="off" enterkeyhint="done">
+</section>
+
+<section class="tarjeta">
+  <div id="lista"></div>
+</section>
+
+<div class="aviso" id="aviso"><span id="avisoTexto"></span><button class="sec" id="btnDeshacer">Deshacer</button></div>
+
+<script>
+(() => {
+  const CLAVE_GASTOS='pesosba.gastos', CLAVE_TASA='pesosba.tasa', CLAVE_PRESUPUESTO='pesosba.presupuesto';
+  const PRESUPUESTO_INICIAL=202400;
+  const $=id=>document.getElementById(id);
+
+  const fmtClp=n=>new Intl.NumberFormat('es-CL',{style:'currency',currency:'CLP',maximumFractionDigits:0}).format(n);
+  const fmtArs=n=>new Intl.NumberFormat('es-AR',{style:'currency',currency:'ARS',maximumFractionDigits:0}).format(n);
+  const leerNumero=t=>{ t=String(t||'').replace(/\s|\$/g,''); if(/,\d{1,2}$/.test(t)) t=t.replace(/\./g,'').replace(',','.'); else t=t.replace(/[.,](?=\d{3}\b)/g,''); const n=parseFloat(t); return isFinite(n)?n:0; };
+
+  let gastos=JSON.parse(localStorage.getItem(CLAVE_GASTOS)||'[]');
+  let tasa=JSON.parse(localStorage.getItem(CLAVE_TASA)||'null');
+  let presupuesto=Number(localStorage.getItem(CLAVE_PRESUPUESTO)||PRESUPUESTO_INICIAL);
+  let ultimoBorrado=null, temporizadorAviso=null;
+
+  const guardar=()=>localStorage.setItem(CLAVE_GASTOS,JSON.stringify(gastos));
+  const arsPorClp=()=>tasa?tasa.blue:0;
+  const aClp=ars=>arsPorClp()?ars/arsPorClp():0;
+
+  async function actualizarTasa(){
+    $('estadoTasa').textContent='Actualizando…';
+    try{
+      const [blue,oficial,tarjeta,dolar]=await Promise.all([
+        fetch('https://dolarapi.com/v1/dolares/blue').then(r=>r.json()),
+        fetch('https://dolarapi.com/v1/dolares/oficial').then(r=>r.json()),
+        fetch('https://dolarapi.com/v1/dolares/tarjeta').then(r=>r.json()),
+        fetch('https://mindicador.cl/api/dolar').then(r=>r.json())
+      ]);
+      const clpPorUsd=dolar.serie[0].valor;
+      tasa={ blue:blue.compra/clpPorUsd, blueVenta:blue.venta/clpPorUsd, oficial:oficial.venta/clpPorUsd, tarjeta:tarjeta.venta/clpPorUsd,
+             usdBlue:blue.compra, clpPorUsd, actualizado:Date.now() };
+      localStorage.setItem(CLAVE_TASA,JSON.stringify(tasa));
+    }catch(e){ console.warn(e); }
+    pintarTasa(); pintarResumen(); pintarLista();
+  }
+
+  function pintarTasa(){
+    if(!tasa){ $('tasaPrincipal').textContent='—'; $('estadoTasa').textContent='Sin conexión y sin datos guardados'; return; }
+    $('tasaPrincipal').textContent=fmtArs(1000*tasa.blue);
+    $('tasaInversa').textContent=`1.000 ARS = ${fmtClp(1000/tasa.blue)} · blue ${fmtArs(tasa.usdBlue)}/USD · dólar ${fmtClp(tasa.clpPorUsd)}`;
+    $('referencias').innerHTML=`<span>Oficial: 1.000 CLP = ${fmtArs(1000*tasa.oficial)}</span><span>Tarjeta: 1.000 CLP = ${fmtArs(1000*tasa.tarjeta)}</span>`;
+    const edadMin=(Date.now()-tasa.actualizado)/60000;
+    const cuando=edadMin<1?'recién':edadMin<60?`hace ${Math.round(edadMin)} min`:edadMin<1440?`hace ${Math.round(edadMin/60)} h`:new Date(tasa.actualizado).toLocaleString('es-CL',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});
+    $('estadoTasa').textContent=`Actualizado ${cuando}`;
+    $('punto').className='punto '+(edadMin<180?'ok':'viejo');
+    convertirDesde('ars');
+  }
+
+  function convertirDesde(origen){
+    if(!tasa) return;
+    if(origen==='ars'){ const v=leerNumero($('convArs').value); $('convClp').value=v?Math.round(v/tasa.blue).toLocaleString('es-CL'):''; }
+    else { const v=leerNumero($('convClp').value); $('convArs').value=v?Math.round(v*tasa.blue).toLocaleString('es-AR'):''; }
+  }
+  $('convArs').addEventListener('input',()=>convertirDesde('ars'));
+  $('convClp').addEventListener('input',()=>convertirDesde('clp'));
+
+  function pintarResumen(){
+    const gastadoClp=gastos.reduce((s,g)=>s+g.clp,0);
+    const restante=presupuesto-gastadoClp;
+    $('presupuesto').textContent=fmtClp(presupuesto);
+    $('gastadoClp').textContent=fmtClp(gastadoClp);
+    $('restanteClp').textContent=fmtClp(restante);
+    $('restanteArs').textContent=tasa&&restante>0?`≈ ${fmtArs(restante*tasa.blue)} al blue de hoy`:'';
+    const pct=presupuesto>0?Math.min(100,gastadoClp/presupuesto*100):0;
+    const barra=$('barra'); barra.querySelector('i').style.width=pct+'%';
+    barra.className='barra '+(pct>=90?'peligro':pct>=70?'alerta':'');
+  }
+
+  $('presupuesto').addEventListener('click',()=>{
+    const r=prompt('¿Cuántos pesos chilenos llevaste?',presupuesto);
+    if(r===null) return; const n=leerNumero(r); if(n>0){ presupuesto=n; localStorage.setItem(CLAVE_PRESUPUESTO,n); pintarResumen(); }
+  });
+
+  function agregar(){
+    const ars=leerNumero($('monto').value); if(!ars) { $('monto').focus(); return; }
+    if(!tasa){ mostrarAviso('Sin tipo de cambio todavía: conéctate y actualiza',false); return; }
+    gastos.unshift({ id:Date.now(), ars, clp:Math.round(aClp(ars)), tasa:tasa.blue, nota:$('nota').value.trim(), fecha:new Date().toISOString() });
+    guardar(); $('monto').value=''; $('nota').value=''; $('monto').focus();
+    pintarResumen(); pintarLista();
+  }
+  $('btnAgregar').addEventListener('click',agregar);
+  $('monto').addEventListener('keydown',e=>{ if(e.key==='Enter'){ e.preventDefault(); $('nota').focus(); } });
+  $('nota').addEventListener('keydown',e=>{ if(e.key==='Enter'){ e.preventDefault(); agregar(); } });
+
+  function borrar(id){
+    const i=gastos.findIndex(g=>g.id===id); if(i<0) return;
+    ultimoBorrado={ indice:i, gasto:gastos[i] }; gastos.splice(i,1); guardar();
+    pintarResumen(); pintarLista();
+    mostrarAviso(`Borrado: ${fmtArs(ultimoBorrado.gasto.ars)}`,true);
+  }
+  $('btnDeshacer').addEventListener('click',()=>{
+    if(!ultimoBorrado) return; gastos.splice(ultimoBorrado.indice,0,ultimoBorrado.gasto); ultimoBorrado=null; guardar();
+    pintarResumen(); pintarLista(); ocultarAviso();
+  });
+  function mostrarAviso(texto,conDeshacer){
+    $('avisoTexto').textContent=texto; $('btnDeshacer').style.display=conDeshacer?'':'none';
+    $('aviso').classList.add('ver'); clearTimeout(temporizadorAviso); temporizadorAviso=setTimeout(ocultarAviso,5000);
+  }
+  function ocultarAviso(){ $('aviso').classList.remove('ver'); }
+
+  function pintarLista(){
+    const cont=$('lista');
+    if(!gastos.length){ cont.innerHTML='<div class="vacio">Todavía no hay gastos. Anota el primero arriba.</div>'; return; }
+    const porDia=new Map();
+    for(const g of gastos){ const d=new Date(g.fecha).toLocaleDateString('es-CL',{weekday:'long',day:'numeric',month:'long'}); if(!porDia.has(d)) porDia.set(d,[]); porDia.get(d).push(g); }
+    let html='';
+    for(const [dia,items] of porDia){
+      const totalDia=items.reduce((s,g)=>s+g.ars,0);
+      html+=`<div class="dia">${dia} · ${fmtArs(totalDia)}</div><ul>`;
+      for(const g of items){
+        const hora=new Date(g.fecha).toLocaleTimeString('es-CL',{hour:'2-digit',minute:'2-digit'});
+        html+=`<li><div class="info"><div class="nota">${escapar(g.nota)||'Gasto'}</div><div class="meta">${hora}</div></div><div class="montos"><b>${fmtArs(g.ars)}</b><span>${fmtClp(g.clp)}</span></div><button class="icono" data-borrar="${g.id}" aria-label="Borrar">✕</button></li>`;
+      }
+      html+='</ul>';
+    }
+    cont.innerHTML=html;
+  }
+  $('lista').addEventListener('click',e=>{ const b=e.target.closest('[data-borrar]'); if(b) borrar(Number(b.dataset.borrar)); });
+  const escapar=t=>String(t).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+  $('btnActualizar').addEventListener('click',actualizarTasa);
+  $('fechaHoy').textContent=new Date().toLocaleDateString('es-CL',{weekday:'short',day:'numeric',month:'short'});
+
+  pintarTasa(); pintarResumen(); pintarLista();
+  if(!tasa || Date.now()-tasa.actualizado>30*60000) actualizarTasa();
+  if('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js');
+})();
+</script>
+</body>
+</html>
