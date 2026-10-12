@@ -61,9 +61,10 @@
 <h1>Mis pesos en Buenos Aires <small id="fechaHoy"></small></h1>
 
 <section class="tarjeta" id="tarjetaTasa">
-  <div class="tenue">1.000 pesos chilenos valen (dólar blue)</div>
+  <div class="tenue">Mi cambio real: 1.000 pesos chilenos valen</div>
   <div class="grande" id="tasaPrincipal">—</div>
   <div class="tenue" id="tasaInversa"></div>
+  <div class="tenue" id="detalleCambio" style="margin-top:6px"></div>
   <div class="referencias" id="referencias"></div>
   <div class="estado"><span><i class="punto" id="punto"></i><span id="estadoTasa">Sin datos</span></span><button class="icono" id="btnActualizar" title="Actualizar">↻</button></div>
 </section>
@@ -76,10 +77,10 @@
 </section>
 
 <section class="tarjeta">
-  <div class="resumen"><span class="tenue">Llevé</span><b id="presupuesto" title="Tocar para cambiar">—</b></div>
+  <div class="resumen"><span class="tenue">Tengo</span><b id="presupuesto" title="Tocar para cambiar">—</b></div>
   <div class="barra" id="barra"><i></i></div>
-  <div class="resumen"><span>Gastado <b id="gastadoClp">—</b></span><span>Me queda <b id="restanteClp">—</b></span></div>
-  <div class="tenue" id="restanteArs" style="margin-top:4px"></div>
+  <div class="resumen"><span>Gastado <b id="gastadoArs">—</b></span><span>Me queda <b id="restanteArs">—</b></span></div>
+  <div class="tenue" id="resumenClp" style="margin-top:4px"></div>
 </section>
 
 <section class="tarjeta">
@@ -98,8 +99,8 @@
 
 <script>
 (() => {
-  const CLAVE_GASTOS='pesosba.gastos', CLAVE_TASA='pesosba.tasa', CLAVE_PRESUPUESTO='pesosba.presupuesto';
-  const PRESUPUESTO_INICIAL=202400;
+  const CLAVE_GASTOS='pesosba.gastos', CLAVE_TASA='pesosba.tasa', CLAVE_CAMBIO='pesosba.cambio';
+  const CAMBIO_INICIAL={ clp:202380, ars:329000 };
   const $=id=>document.getElementById(id);
 
   const fmtClp=n=>new Intl.NumberFormat('es-CL',{style:'currency',currency:'CLP',maximumFractionDigits:0}).format(n);
@@ -108,12 +109,12 @@
 
   let gastos=JSON.parse(localStorage.getItem(CLAVE_GASTOS)||'[]');
   let tasa=JSON.parse(localStorage.getItem(CLAVE_TASA)||'null');
-  let presupuesto=Number(localStorage.getItem(CLAVE_PRESUPUESTO)||PRESUPUESTO_INICIAL);
+  let cambio=JSON.parse(localStorage.getItem(CLAVE_CAMBIO)||'null')||CAMBIO_INICIAL;
   let ultimoBorrado=null, temporizadorAviso=null;
 
   const guardar=()=>localStorage.setItem(CLAVE_GASTOS,JSON.stringify(gastos));
-  const arsPorClp=()=>tasa?tasa.blue:0;
-  const aClp=ars=>arsPorClp()?ars/arsPorClp():0;
+  const tasaReal=()=>cambio.ars/cambio.clp;
+  const aClp=ars=>ars/tasaReal();
 
   async function actualizarTasa(){
     $('estadoTasa').textContent='Actualizando…';
@@ -133,46 +134,48 @@
   }
 
   function pintarTasa(){
-    if(!tasa){ $('tasaPrincipal').textContent='—'; $('estadoTasa').textContent='Sin conexión y sin datos guardados'; return; }
-    $('tasaPrincipal').textContent=fmtArs(1000*tasa.blue);
-    $('tasaInversa').textContent=`1.000 ARS = ${fmtClp(1000/tasa.blue)} · blue ${fmtArs(tasa.usdBlue)}/USD · dólar ${fmtClp(tasa.clpPorUsd)}`;
-    $('referencias').innerHTML=`<span>Oficial: 1.000 CLP = ${fmtArs(1000*tasa.oficial)}</span><span>Tarjeta: 1.000 CLP = ${fmtArs(1000*tasa.tarjeta)}</span>`;
+    $('tasaPrincipal').textContent=fmtArs(1000*tasaReal());
+    $('tasaInversa').textContent=`1.000 ARS = ${fmtClp(1000/tasaReal())}`;
+    $('detalleCambio').textContent=`Pagué ${fmtClp(cambio.clp)} y me dieron ${fmtArs(cambio.ars)}`;
+    convertirDesde('ars');
+    if(!tasa){ $('referencias').innerHTML=''; $('estadoTasa').textContent='Referencias sin conexión'; return; }
+    const difBlue=cambio.ars-cambio.clp*tasa.blue;
+    $('referencias').innerHTML=`<span>Blue hoy: 1.000 CLP = ${fmtArs(1000*tasa.blue)}</span><span>Oficial: ${fmtArs(1000*tasa.oficial)}</span><span>Tarjeta: ${fmtArs(1000*tasa.tarjeta)}</span><span>${difBlue>=0?'Gané':'Perdí'} ${fmtArs(Math.abs(difBlue))} vs. blue</span>`;
     const edadMin=(Date.now()-tasa.actualizado)/60000;
     const cuando=edadMin<1?'recién':edadMin<60?`hace ${Math.round(edadMin)} min`:edadMin<1440?`hace ${Math.round(edadMin/60)} h`:new Date(tasa.actualizado).toLocaleString('es-CL',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});
-    $('estadoTasa').textContent=`Actualizado ${cuando}`;
+    $('estadoTasa').textContent=`Referencias actualizadas ${cuando}`;
     $('punto').className='punto '+(edadMin<180?'ok':'viejo');
-    convertirDesde('ars');
   }
 
   function convertirDesde(origen){
-    if(!tasa) return;
-    if(origen==='ars'){ const v=leerNumero($('convArs').value); $('convClp').value=v?Math.round(v/tasa.blue).toLocaleString('es-CL'):''; }
-    else { const v=leerNumero($('convClp').value); $('convArs').value=v?Math.round(v*tasa.blue).toLocaleString('es-AR'):''; }
+    if(origen==='ars'){ const v=leerNumero($('convArs').value); $('convClp').value=v?Math.round(aClp(v)).toLocaleString('es-CL'):''; }
+    else { const v=leerNumero($('convClp').value); $('convArs').value=v?Math.round(v*tasaReal()).toLocaleString('es-AR'):''; }
   }
   $('convArs').addEventListener('input',()=>convertirDesde('ars'));
   $('convClp').addEventListener('input',()=>convertirDesde('clp'));
 
   function pintarResumen(){
-    const gastadoClp=gastos.reduce((s,g)=>s+g.clp,0);
-    const restante=presupuesto-gastadoClp;
-    $('presupuesto').textContent=fmtClp(presupuesto);
-    $('gastadoClp').textContent=fmtClp(gastadoClp);
-    $('restanteClp').textContent=fmtClp(restante);
-    $('restanteArs').textContent=tasa&&restante>0?`≈ ${fmtArs(restante*tasa.blue)} al blue de hoy`:'';
-    const pct=presupuesto>0?Math.min(100,gastadoClp/presupuesto*100):0;
+    const gastadoArs=gastos.reduce((s,g)=>s+g.ars,0);
+    const restante=cambio.ars-gastadoArs;
+    $('presupuesto').textContent=fmtArs(cambio.ars);
+    $('gastadoArs').textContent=fmtArs(gastadoArs);
+    $('restanteArs').textContent=fmtArs(restante);
+    $('resumenClp').textContent=`En chilenos: gastado ${fmtClp(aClp(gastadoArs))} · me queda ${fmtClp(aClp(restante))}`;
+    const pct=cambio.ars>0?Math.min(100,gastadoArs/cambio.ars*100):0;
     const barra=$('barra'); barra.querySelector('i').style.width=pct+'%';
     barra.className='barra '+(pct>=90?'peligro':pct>=70?'alerta':'');
   }
 
   $('presupuesto').addEventListener('click',()=>{
-    const r=prompt('¿Cuántos pesos chilenos llevaste?',presupuesto);
-    if(r===null) return; const n=leerNumero(r); if(n>0){ presupuesto=n; localStorage.setItem(CLAVE_PRESUPUESTO,n); pintarResumen(); }
+    const c=prompt('¿Cuántos pesos chilenos pagaste?',cambio.clp); if(c===null) return;
+    const a=prompt('¿Cuántos pesos argentinos te dieron?',cambio.ars); if(a===null) return;
+    const clp=leerNumero(c), ars=leerNumero(a);
+    if(clp>0&&ars>0){ cambio={clp,ars}; localStorage.setItem(CLAVE_CAMBIO,JSON.stringify(cambio)); pintarTasa(); pintarResumen(); pintarLista(); }
   });
 
   function agregar(){
     const ars=leerNumero($('monto').value); if(!ars) { $('monto').focus(); return; }
-    if(!tasa){ mostrarAviso('Sin tipo de cambio todavía: conéctate y actualiza',false); return; }
-    gastos.unshift({ id:Date.now(), ars, clp:Math.round(aClp(ars)), tasa:tasa.blue, nota:$('nota').value.trim(), fecha:new Date().toISOString() });
+    gastos.unshift({ id:Date.now(), ars, nota:$('nota').value.trim(), fecha:new Date().toISOString() });
     guardar(); $('monto').value=''; $('nota').value=''; $('monto').focus();
     pintarResumen(); pintarLista();
   }
@@ -207,7 +210,7 @@
       html+=`<div class="dia">${dia} · ${fmtArs(totalDia)}</div><ul>`;
       for(const g of items){
         const hora=new Date(g.fecha).toLocaleTimeString('es-CL',{hour:'2-digit',minute:'2-digit'});
-        html+=`<li><div class="info"><div class="nota">${escapar(g.nota)||'Gasto'}</div><div class="meta">${hora}</div></div><div class="montos"><b>${fmtArs(g.ars)}</b><span>${fmtClp(g.clp)}</span></div><button class="icono" data-borrar="${g.id}" aria-label="Borrar">✕</button></li>`;
+        html+=`<li><div class="info"><div class="nota">${escapar(g.nota)||'Gasto'}</div><div class="meta">${hora}</div></div><div class="montos"><b>${fmtArs(g.ars)}</b><span>${fmtClp(aClp(g.ars))}</span></div><button class="icono" data-borrar="${g.id}" aria-label="Borrar">✕</button></li>`;
       }
       html+='</ul>';
     }
